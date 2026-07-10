@@ -1,0 +1,46 @@
+{
+  "devDependencies": {
+    "@types/node": "^22.13.14",
+    "@types/qrcode": "^1.5.6",
+    "concurrently": "^9.1.2",
+    "dotenv": "^16.4.7",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "name": "awarabot",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "prod": "npx tsc && node .",
+    "dev": "concurrently \"npm run build:go\" \"tsc --watch\" \"nodemon dist/index.js\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moo-d/AwaraBot.git"
+  },
+  "keywords": [
+    "awara",
+    "awarabot",
+    "bot",
+    "whatsapp",
+    "whatsapp-bot"
+  ],
+  "author": "moo-d",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/moo-d/AwaraBot/issues"
+  },
+  "homepage": "https://github.com/moo-d/AwaraBot#readme",
+  "description": "",
+  "dependencies": {
+    "@types/qrcode-terminal": "^0.12.2",
+    "@vitalets/google-translate-api": "^9.2.1",
+    "axios": "^1.8.4",
+    "btch-downloader": "^6.0.37",
+    "fs-extra": "^11.3.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
