@@ -1,4 +1,5 @@
 import { Command } from '../types'
+import { downloadTiktok } from '../utils/btchDownloader'
 
 export default {
   name: 'tiktok',
@@ -8,60 +9,75 @@ export default {
   description: 'Download TikTok video or images without watermark',
   async handler(bot, args, context) {
     if (!args.length) {
-      return bot.sendMessage(context.chat, 
+      return bot.sendMessage(context.chat,
         '⚠️ Please provide a TikTok URL\nExample: /tiktok https://vm.tiktok.com/xyz'
       )
     }
 
     const url = args[0]
     if (!url.match(/tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com/)) {
-      return bot.sendMessage(context.chat, 
+      return bot.sendMessage(context.chat,
         '❌ Invalid TikTok URL. Please provide a valid TikTok link.'
       )
     }
 
     try {
-      const { result, error } = await bot.downloader(url, 'tiktok')
-      
-      if (!result) {
-        throw new Error(error || 'No content found in response')
-      }
+      const result = await downloadTiktok(url)
 
       const sender = context.from.split(':')[0] + '@s.whatsapp.net'
       const isGroup = context.isGroup
       const sendOperations: Promise<unknown>[] = []
 
-      if (result.images?.length) {
+      if (result.images.length > 0) {
         const sendPrivate = isGroup && result.images.length > 1
-        
+
         if (sendPrivate) {
-          await bot.sendMessage(context.chat, 
+          await bot.sendMessage(context.chat,
             `📸 Found ${result.images.length} images. Sending to your private chat.`
           )
         }
 
         const targetChat = sendPrivate ? sender : context.chat
-        const musicTarget = sendPrivate ? sender : context.chat
 
         for (const image of result.images) {
-          sendOperations.push(bot.sendImage(targetChat, image))
+          sendOperations.push(bot.sendImage(targetChat, image, '', true))
         }
 
-        if (result.music) {
-          sendOperations.push(bot.sendAudio(musicTarget, result.music, !sendPrivate))
+        if (result.audio) {
+          sendOperations.push(bot.sendAudio(targetChat, result.audio, true))
         }
       } else if (result.video) {
-        sendOperations.push(
-          bot.sendVideo(context.chat, result.video, 'TikTok Video', true)
-        )
-        
-        if (result.music) {
+        const videoBuffer = await (async () => {
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const controller = new AbortController()
+              const timeoutId = setTimeout(() => controller.abort(), 60000)
+              const res = await fetch(result.video, {
+                signal: controller.signal,
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+              })
+              clearTimeout(timeoutId)
+              if (!res.ok) throw new Error(`HTTP ${res.status}`)
+              return Buffer.from(await res.arrayBuffer())
+            } catch (err) {
+              console.error(`[TIKTOK] Video download attempt ${attempt} failed:`, err)
+              if (attempt < 3) await new Promise(r => setTimeout(r, 2000))
+            }
+          }
+          return null
+        })()
+
+        if (videoBuffer) {
           sendOperations.push(
-            bot.sendAudio(context.chat, result.music, true)
+            bot.sendVideo(context.chat, videoBuffer, result.title || 'TikTok Video')
           )
+        } else {
+          await bot.sendMessage(context.chat, '❌ Gagal download video (koneksi lambat/timeout)')
         }
-      } else {
-        throw new Error('No video or images found in response')
+
+        if (result.audio) {
+          sendOperations.push(bot.sendAudio(context.chat, result.audio, true))
+        }
       }
 
       const results = await Promise.allSettled(sendOperations)
@@ -72,11 +88,11 @@ export default {
       })
 
     } catch (error) {
-      const errorMessage = error instanceof Error 
-        ? error.message 
+      const errorMessage = error instanceof Error
+        ? error.message
         : 'An unknown error occurred'
       await bot.sendMessage(
-        context.chat, 
+        context.chat,
         `❌ Failed to download TikTok content: ${errorMessage}`
       )
     }

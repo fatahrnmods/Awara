@@ -1,9 +1,15 @@
 import { Command } from '../types'
+import { downloadYoutube } from '../utils/btchDownloader'
+
+const sanitizeFilename = (name: string): string => {
+  return name.replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 100)
+}
 
 export default {
   name: 'ytmp4',
   alias: ['ytvideo', 'ytv'],
   category: 'downloader',
+  wait: true,
   description: 'Download YouTube video (MP4)',
   async handler(bot, args, context) {
     if (!args.length) {
@@ -15,46 +21,49 @@ export default {
 
     const url = args[0]
     const youtubeRegex = /(youtu\.be\/|youtube\.com\/(watch\?v=|embed\/|v\/|shorts\/))([a-zA-Z0-9_-]{11})/
-    
     if (!youtubeRegex.test(url)) {
-      return bot.sendMessage(
-        context.chat,
-        '❌ Invalid YouTube URL. Please provide a valid YouTube link.'
-      )
+      return bot.sendMessage(context.chat, '❌ Invalid YouTube URL. Please provide a valid link.')
     }
 
     try {
-      await bot.sendMessage(context.chat, '⏳ Downloading YouTube video... (This may take a while)')
+      const result = await downloadYoutube(url)
+      if (!result.mp4) throw new Error('No video URL received')
 
-      const { result, error } = await bot.downloader(url, 'youtube', 'mp4')
+      const title = result.title || 'Unknown'
+      const filename = `${sanitizeFilename(title)}.mp4`
 
-      if (!result?.url) {
-        throw new Error(error || 'No video URL received')
+      let buffer: Buffer | null = null
+      let lastError: any = null
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 120000)
+
+          const res = await fetch(result.mp4, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          })
+          clearTimeout(timeoutId)
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          buffer = Buffer.from(await res.arrayBuffer())
+          break
+        } catch (err: any) {
+          lastError = err
+          console.error(`[YTMP4] Attempt ${attempt} failed:`, err.message)
+          if (attempt < 3) await new Promise(r => setTimeout(r, 2000))
+        }
       }
 
-      if (!result.url.startsWith('http')) {
-        throw new Error('Invalid video URL format')
+      if (!buffer) {
+        throw new Error(`Download failed after 3 attempts: ${lastError?.message || 'Unknown error'}`)
       }
 
-      const [minutes, seconds] = result.duration 
-        ? [Math.floor(result.duration / 60), Math.floor(result.duration % 60)]
-        : [0, 0]
-
-      await Promise.all([
-        bot.sendVideo(context.chat, result.url, result.title || 'YouTube Video'),
-        bot.sendMessage(
-          context.chat,
-          `✅ *${result.title || 'YouTube Video'}*\n` +
-          (result.duration ? `⏱ Duration: ${minutes}m ${seconds}s` : '')
-        )
-      ])
-
+      await bot.sendVideo(context.chat, buffer, `🎬 ${title}\n👤 ${result.author || 'Unknown'}`)
     } catch (error: any) {
-      await bot.sendMessage(
-        context.chat,
-        `❌ Failed to download video: ${error.message || 'Unknown error'}\n` +
-        'Please try again later.'
-      )
+      console.error('[YouTube MP4] Download error:', error)
+      await bot.sendMessage(context.chat, `❌ Failed to download video: ${error.message}`)
     }
   }
 } as Command

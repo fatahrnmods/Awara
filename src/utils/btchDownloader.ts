@@ -90,3 +90,35 @@ export async function downloadCapcut(url: string) {
   if (!res.status || !res.result) throw new Error('Failed to fetch Capcut content')
   return res.result
 }
+
+export async function downloadYoutube(url: string) {
+  const { youtube } = await import('btch-downloader')
+  const res: any = await youtube(url)
+  if (!res.status) throw new Error('Failed to fetch YouTube content')
+  return {
+    title: res.title as string,
+    author: res.author as string,
+    thumbnail: res.thumbnail as string,
+    mp3: res.mp3 as string,
+    mp4: res.mp4 as string,
+  }
+}
+
+export async function downloadTiktok(url: string) {
+  const { ttdl } = await import('btch-downloader')
+  const res: any = await ttdl(url)
+  if (!res.status) throw new Error('Failed to fetch TikTok content')
+
+  const hasVideo = Array.isArray(res.video) && res.video.length > 0
+  const hasImages = Array.isArray(res.images) && res.images.length > 0
+
+  if (!hasVideo && !hasImages) {
+    throw new Error('Video tidak ditemukan atau sudah dihapus/private')
+  }
+
+  return {
+    video: hasVideo ? res.video[0] : null,
+    images: hasImages ? res.images : [],
+    audio: Array.isArray(res.audio) && res.audio.length > 0 ? res.audio[0] : null,
+  }
+}

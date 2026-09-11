@@ -48,6 +48,8 @@ exports.downloadSpotify = downloadSpotify;
 exports.downloadMediafire = downloadMediafire;
 exports.downloadThreads = downloadThreads;
 exports.downloadCapcut = downloadCapcut;
+exports.downloadYoutube = downloadYoutube;
+exports.downloadTiktok = downloadTiktok;
 const btch_downloader_1 = require("btch-downloader");
 function detectFromUrl(url) {
     try {
@@ -137,5 +139,38 @@ function downloadCapcut(url) {
         if (!res.status || !res.result)
             throw new Error('Failed to fetch Capcut content');
         return res.result;
+    });
+}
+function downloadYoutube(url) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { youtube } = yield Promise.resolve().then(() => __importStar(require('btch-downloader')));
+        const res = yield youtube(url);
+        if (!res.status)
+            throw new Error('Failed to fetch YouTube content');
+        return {
+            title: res.title,
+            author: res.author,
+            thumbnail: res.thumbnail,
+            mp3: res.mp3,
+            mp4: res.mp4,
+        };
+    });
+}
+function downloadTiktok(url) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { ttdl } = yield Promise.resolve().then(() => __importStar(require('btch-downloader')));
+        const res = yield ttdl(url);
+        if (!res.status)
+            throw new Error('Failed to fetch TikTok content');
+        const hasVideo = Array.isArray(res.video) && res.video.length > 0;
+        const hasImages = Array.isArray(res.images) && res.images.length > 0;
+        if (!hasVideo && !hasImages) {
+            throw new Error('Video tidak ditemukan atau sudah dihapus/private');
+        }
+        return {
+            video: hasVideo ? res.video[0] : null,
+            images: hasImages ? res.images : [],
+            audio: Array.isArray(res.audio) && res.audio.length > 0 ? res.audio[0] : null,
+        };
     });
 }

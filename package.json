@@ -11,10 +11,10 @@
   "name": "awarabot",
   "version": "1.0.0",
   "main": "dist/index.js",
-  "scripts": {
-    "start": "node dist/index.js",
-    "prod": "npx tsc && node .",
-    "dev": "concurrently \"npm run build:go\" \"tsc --watch\" \"nodemon dist/index.js\""
+   "scripts": {
+    "start": "bun run src/index.ts",
+    "prod": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts"
   },
   "repository": {
     "type": "git",

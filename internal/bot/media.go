@@ -44,6 +44,71 @@ func getAudioDuration(path string) (float64, error) {
 	return strconv.ParseFloat(durationStr, 64)
 }
 
+func getVideoDuration(path string) (float64, error) {
+	cmd := exec.Command("ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		path,
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe error: %v, output: %s", err, string(output))
+	}
+	durationStr := strings.TrimSpace(string(output))
+	return strconv.ParseFloat(durationStr, 64)
+}
+
+func generateVideoThumbnail(videoPath string) ([]byte, error) {
+	tmpThumb, err := os.CreateTemp("", "thumb_*.jpg")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(tmpThumb.Name())
+	tmpThumb.Close()
+
+	cmd := exec.Command("ffmpeg", "-y",
+		"-i", videoPath,
+		"-ss", "00:00:00.500",
+		"-vframes", "1",
+		"-vf", "scale=320:-1",
+		tmpThumb.Name(),
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("ffmpeg thumbnail error: %v, output: %s", err, string(out))
+	}
+
+	return os.ReadFile(tmpThumb.Name())
+}
+
+func (b *Bot) getVideoInfo(videoData []byte) (float64, []byte, error) {
+	tmpFile, err := os.CreateTemp("", "whatsapp_video_*.mp4")
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := tmpFile.Write(videoData); err != nil {
+		return 0, nil, fmt.Errorf("failed to write temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	duration, durErr := getVideoDuration(tmpFile.Name())
+	thumbnail, thumbErr := generateVideoThumbnail(tmpFile.Name())
+
+	if durErr != nil {
+		durErr = nil
+		duration = 0
+	}
+	if thumbErr != nil {
+		thumbErr = nil
+		thumbnail = nil
+	}
+
+	return duration, thumbnail, nil
+}
+
 func (b *Bot) getAudioDuration(audioData []byte) (float64, error) {
 	tmpFile, err := os.CreateTemp("", "whatsapp_audio_*.tmp")
 	if err != nil {
@@ -112,6 +177,15 @@ func (b *Bot) uploadAndSendMedia(jid types.JID, mediaData []byte, mediaType Medi
 		vidMsg.FileEncSHA256 = uploaded.FileEncSHA256
 		vidMsg.FileSHA256 = uploaded.FileSHA256
 		vidMsg.FileLength = proto.Uint64(uint64(len(mediaData)))
+
+		if duration, thumbnail, err := b.getVideoInfo(mediaData); err == nil {
+			if duration > 0 {
+				vidMsg.Seconds = proto.Uint32(uint32(duration + 0.5))
+			}
+			if thumbnail != nil {
+				vidMsg.JPEGThumbnail = thumbnail
+			}
+		}
 	case MediaAudio:
 		audioMsg := msg.AudioMessage
 		audioMsg.Mimetype = proto.String("audio/mpeg")
